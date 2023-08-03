@@ -41,6 +41,7 @@ var (
 	webConfig          = kingpinflag.AddFlags(kingpin.CommandLine, ":9121")
 	metricsPath        = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
 	addrs              = kingpin.Flag("redis.addrs", "Redis server addresses.").Default("localhost:6379").Strings()
+	passwd             = kingpin.Flag("redis.passwd", "Redis server password.").Default("").String()
 	db                 = kingpin.Flag("redis.db", "Redis db number.").Default("0").Int()
 	mode               = kingpin.Flag("redis.mode", "Redis server mode.").Default("standalone").String()
 	clientName         = kingpin.Flag("redis.client-name", "Redis client name.").Default("redis-exporter").String()
@@ -79,6 +80,7 @@ func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFun
 
 		opts := &redis.UniversalOptions{
 			Addrs:      *addrs,
+			Password:   *passwd,
 			ClientName: *clientName,
 			DB:         *db,
 		}
