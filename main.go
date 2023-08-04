@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -44,7 +45,7 @@ var (
 	passwd             = kingpin.Flag("redis.passwd", "Redis server password.").Default("").String()
 	db                 = kingpin.Flag("redis.db", "Redis db number.").Default("0").Int()
 	mode               = kingpin.Flag("redis.mode", "Redis server mode.").Default("standalone").String()
-	clientName         = kingpin.Flag("redis.client-name", "Redis client name.").Default("redis-exporter").String()
+	clientName         = kingpin.Flag("redis.client-name", "Redis client name.").Default("redis_exporter").String()
 	keyFile            = kingpin.Flag("redis.tls.key-file", "Client private key file.").Default("").String()
 	caFile             = kingpin.Flag("redis.tls.ca-file", "Client root ca file.").Default("").String()
 	insecureSkipVerify = kingpin.Flag("redis.tls.insecure-skip-verify", "Skip server certificate verification.").Bool()
@@ -53,6 +54,10 @@ var (
 
 func init() {
 	prometheus.MustRegister(version.NewCollector("redis_exporter"))
+}
+
+var scrapers = map[collector.Scraper]bool{
+	collector.MaxMemoryScraper{}: true,
 }
 
 func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFunc {
@@ -79,10 +84,11 @@ func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFun
 		r = r.WithContext(ctx)
 
 		opts := &redis.UniversalOptions{
-			Addrs:      *addrs,
-			Password:   *passwd,
-			ClientName: *clientName,
-			DB:         *db,
+			Addrs:           *addrs,
+			Password:        *passwd,
+			ClientName:      *clientName,
+			ConnMaxLifetime: 30 * time.Second,
+			DB:              *db,
 		}
 
 		registry := prometheus.NewRegistry()
@@ -99,20 +105,42 @@ func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFun
 }
 
 func main() {
-	promlogconfig := &promlog.Config{}
-	flag.AddFlags(kingpin.CommandLine, promlogconfig)
+	// Generate ON/OFF flags for all scrapers.
+	scraperFlags := map[collector.Scraper]*bool{}
+	for scraper, enabledByDefault := range scrapers {
+		defaultOn := "false"
+		if enabledByDefault {
+			defaultOn = "true"
+		}
 
+		f := kingpin.Flag(
+			fmt.Sprintf("collect.%s", scraper.Name()),
+			scraper.Help(),
+		).Default(defaultOn).Bool()
+
+		scraperFlags[scraper] = f
+	}
+
+	promlogconfig := &promlog.Config{}
+
+	flag.AddFlags(kingpin.CommandLine, promlogconfig)
 	kingpin.HelpFlag.Short('h')
 	kingpin.Version(version.Print("redis_exporter"))
 	kingpin.Parse()
 
 	logger := promlog.New(promlogconfig)
 
-	level.Info(logger).Log("msg", "Starting redis_exporter", "version", version.Info())
-	level.Info(logger).Log("msg", "Build context", "context", version.BuildContext())
+	enabledScrapers := []collector.Scraper{}
+	for scraper, enabled := range scraperFlags {
+		if *enabled {
+			level.Info(logger).Log("msg", "Scraper enabled", "scraper", scraper.Name())
+			enabledScrapers = append(enabledScrapers, scraper)
+		}
+	}
 
-	handlerFunc := newHandler([]collector.Scraper{}, logger)
+	handlerFunc := newHandler(enabledScrapers, logger)
 	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handlerFunc))
+
 	if *metricsPath != "/" && *metricsPath != "" {
 		landingConfig := web.LandingConfig{
 			Name:        "Redis Exporter",
@@ -136,6 +164,9 @@ func main() {
 	}
 
 	srv := &http.Server{}
+	level.Info(logger).Log("msg", "Starting redis_exporter", "version", version.Info())
+	level.Info(logger).Log("msg", "Build context", "context", version.BuildContext())
+
 	if err := web.ListenAndServe(srv, webConfig, logger); err != nil {
 		level.Error(logger).Log("msg", "Error starting HTTP Server", "err", err)
 		os.Exit(1)

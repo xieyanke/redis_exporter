@@ -18,11 +18,16 @@ package collector
 
 import (
 	"context"
+	"fmt"
+	"regexp"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/redis/go-redis/v9"
+	"github.com/xieyanke/redis_exporter/util"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -48,8 +53,15 @@ var (
 	)
 
 	redisScrapeDurationSeconds = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "collector_duration_seconds"),
-		"Collector time duration.",
+		prometheus.BuildFQName(namespace, subsystem, "scrape_duration_seconds"),
+		"Collector scrape duration.",
+		[]string{"collector"},
+		nil,
+	)
+
+	redisScrapeSuccess = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, subsystem, "scrape_success"),
+		"redis_exporter: Whether a collector scrape success.",
 		[]string{"collector"},
 		nil,
 	)
@@ -94,6 +106,28 @@ func (e *Exporter) scrape(ctx context.Context, ch chan<- prometheus.Metric) floa
 	}
 
 	ch <- prometheus.MustNewConstMetric(redisScrapeDurationSeconds, prometheus.GaugeValue, time.Since(scrapeTime).Seconds(), "connection")
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	for _, scraper := range e.scrapers {
+		wg.Add(1)
+		go func(scraper Scraper) {
+			defer wg.Done()
+
+			scrapeSuccess := 1.0
+			label := fmt.Sprintf("collect.%s", scraper.Name())
+			startTime := time.Now()
+			if err := scraper.Scrape(ctx, rdb, ch, log.With(e.logger, "scraper", scraper.Name())); err != nil {
+				level.Error(e.logger).Log("msg", "Error from scraper", "scraper", scraper.Name(), "err", err)
+				scrapeSuccess = 0.0
+			}
+			duration := time.Since(startTime).Seconds()
+			ch <- prometheus.MustNewConstMetric(redisScrapeDurationSeconds, prometheus.GaugeValue, duration, label)
+			ch <- prometheus.MustNewConstMetric(redisScrapeSuccess, prometheus.GaugeValue, scrapeSuccess, label)
+		}(scraper)
+	}
+
 	return 1.0
 }
 
@@ -104,4 +138,25 @@ func New(ctx context.Context, opts *redis.UniversalOptions, scrapers []Scraper, 
 		opts:     opts,
 		scrapers: scrapers,
 	}
+}
+
+var versionRE = regexp.MustCompile(`^\d+\.\d+`)
+
+func getRedisVersion(ctx context.Context, rdb redis.UniversalClient, logger log.Logger) (float64, error) {
+	var versionStr string
+	var versionNum float64
+
+	section, err := rdb.Info(ctx, "Server").Result()
+	if err != nil {
+		return -1.0, err
+	}
+
+	version := util.ParseInfoSection(section)["redis_version"]
+	versionStr = versionRE.FindString(version)
+	versionNum, err = strconv.ParseFloat(versionStr, 64)
+	if err != nil {
+		return -1.0, err
+	}
+
+	return versionNum, nil
 }

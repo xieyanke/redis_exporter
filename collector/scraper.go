@@ -25,8 +25,12 @@ import (
 )
 
 type Scraper interface {
+	// Name of the Scraper. Should be unique.
 	Name() string
+	// Help describes the role of the Scraper.
 	Help() string
+	// Mininum version of Redis from which scraper is available.
 	Version() string
-	Scrape(ctx context.Context, cli redis.UniversalClient, ch chan<- prometheus.Metric, logger log.Logger) error
+	// Scrape collects data from redis connection and sends it over channel as prometheus metric.
+	Scrape(ctx context.Context, rdb redis.UniversalClient, ch chan<- prometheus.Metric, logger log.Logger) error
 }
