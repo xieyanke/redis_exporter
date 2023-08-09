@@ -33,34 +33,34 @@ import (
 )
 
 const (
-	namespace = "redis"
+	Namespace = "redis"
 	subsystem = "exporter"
 )
 
 var (
 	redisUp = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "up"),
+		prometheus.BuildFQName(Namespace, "", "up"),
 		"Whether the redis node is up.",
 		nil,
 		nil,
 	)
 
 	redisNodeUptime = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "uptime_seconds"),
+		prometheus.BuildFQName(Namespace, "", "uptime_seconds"),
 		"Number of seconds since the redis node started.",
 		[]string{"node_id"},
 		nil,
 	)
 
 	redisScrapeDurationSeconds = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "scrape_duration_seconds"),
+		prometheus.BuildFQName(Namespace, subsystem, "scrape_duration_seconds"),
 		"Collector scrape duration.",
 		[]string{"collector"},
 		nil,
 	)
 
 	redisScrapeSuccess = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "scrape_success"),
+		prometheus.BuildFQName(Namespace, subsystem, "scrape_success"),
 		"redis_exporter: Whether a collector scrape success.",
 		[]string{"collector"},
 		nil,
@@ -71,7 +71,7 @@ var (
 type Exporter struct {
 	ctx      context.Context
 	logger   log.Logger
-	opts     *redis.UniversalOptions
+	opts     []*redis.Options
 	scrapers []Scraper
 }
 
@@ -92,20 +92,23 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 var _ prometheus.Collector = (*Exporter)(nil)
 
 func (e *Exporter) scrape(ctx context.Context, ch chan<- prometheus.Metric) float64 {
-	var err error
-	scrapeTime := time.Now()
+	// var err error
+	// scrapeTime := time.Now()
 
-	rdb := redis.NewUniversalClient(e.opts)
-
-	defer rdb.Close()
-
-	_, err = rdb.Ping(ctx).Result()
-	if err != nil {
-		level.Error(e.logger).Log("msg", "Error pinging redis", "err", err)
-		return 0.0
+	var rdbs []*redis.Client
+	for _, opt := range e.opts {
+		rdbs = append(rdbs, redis.NewClient(opt))
 	}
 
-	ch <- prometheus.MustNewConstMetric(redisScrapeDurationSeconds, prometheus.GaugeValue, time.Since(scrapeTime).Seconds(), "connection")
+	// TODO: close
+
+	// _, err = rdb.Ping(ctx).Result()
+	// if err != nil {
+	// 	level.Error(e.logger).Log("msg", "Error pinging redis", "err", err)
+	// 	return 0.0
+	// }
+
+	// ch <- prometheus.MustNewConstMetric(redisScrapeDurationSeconds, prometheus.GaugeValue, time.Since(scrapeTime).Seconds(), "connection")
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -118,7 +121,7 @@ func (e *Exporter) scrape(ctx context.Context, ch chan<- prometheus.Metric) floa
 			scrapeSuccess := 1.0
 			label := fmt.Sprintf("collect.%s", scraper.Name())
 			startTime := time.Now()
-			if err := scraper.Scrape(ctx, rdb, ch, log.With(e.logger, "scraper", scraper.Name())); err != nil {
+			if err := scraper.Scrape(ctx, rdbs, ch, log.With(e.logger, "scraper", scraper.Name())); err != nil {
 				level.Error(e.logger).Log("msg", "Error from scraper", "scraper", scraper.Name(), "err", err)
 				scrapeSuccess = 0.0
 			}
@@ -131,7 +134,7 @@ func (e *Exporter) scrape(ctx context.Context, ch chan<- prometheus.Metric) floa
 	return 1.0
 }
 
-func New(ctx context.Context, opts *redis.UniversalOptions, scrapers []Scraper, logger log.Logger) *Exporter {
+func New(ctx context.Context, opts []*redis.Options, scrapers []Scraper, logger log.Logger) *Exporter {
 	return &Exporter{
 		ctx:      ctx,
 		logger:   logger,

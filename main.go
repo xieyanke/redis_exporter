@@ -36,6 +36,7 @@ import (
 	"github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"github.com/redis/go-redis/v9"
 	"github.com/xieyanke/redis_exporter/collector"
+	"github.com/xieyanke/redis_exporter/util"
 )
 
 var (
@@ -57,7 +58,9 @@ func init() {
 }
 
 var scrapers = map[collector.Scraper]bool{
-	collector.MaxMemoryScraper{}: true,
+	collector.MaxMemoryScraper{}:    true,
+	&collector.ClusterInfoScraper{}: true,
+	&collector.InfoServerScraper{}:  true,
 }
 
 func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFunc {
@@ -83,17 +86,19 @@ func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFun
 
 		r = r.WithContext(ctx)
 
-		opts := &redis.UniversalOptions{
-			Addrs:           *addrs,
-			Password:        *passwd,
-			ClientName:      *clientName,
-			ConnMaxLifetime: 30 * time.Second,
-			DB:              *db,
+		firstCli := redis.NewClient(&redis.Options{
+			Addr:     (*addrs)[0],
+			Password: *passwd,
+		})
+
+		allAddrs := util.GetAllRedisNodes(ctx, firstCli)
+		var opts []*redis.Options
+		for _, addr := range allAddrs {
+			opts = append(opts, &redis.Options{Addr: addr, Password: *passwd})
 		}
 
 		registry := prometheus.NewRegistry()
 		registry.MustRegister(collector.New(ctx, opts, scrapers, logger))
-
 		gatherers := prometheus.Gatherers{
 			prometheus.DefaultGatherer,
 			registry,
