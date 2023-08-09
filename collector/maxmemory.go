@@ -31,9 +31,9 @@ const (
 
 var (
 	maxMemoryDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, maxMemory, "bytes"),
-		"Collect redis config maxmemory.",
-		nil,
+		prometheus.BuildFQName(Namespace, maxMemory, "bytes"),
+		"Collect config maxmemory from each redis node.",
+		[]string{"addr", "mode", "maxmemory_policy"},
 		nil,
 	)
 )
@@ -51,23 +51,31 @@ func (MaxMemoryScraper) Name() string {
 }
 
 // Scrape implements Scraper.
-func (MaxMemoryScraper) Scrape(ctx context.Context, rdb redis.UniversalClient, ch chan<- prometheus.Metric, logger log.Logger) error {
-	resultMap, err := rdb.ConfigGet(ctx, "maxmemory").Result()
-	if err != nil {
-		return err
+func (MaxMemoryScraper) Scrape(ctx context.Context, rdbs []*redis.Client, ch chan<- prometheus.Metric, logger log.Logger) error {
+	var err error
+	for _, rdb := range rdbs {
+		addr := rdb.Options().Addr
+		resultMap, err := rdb.ConfigGet(ctx, "maxmemory").Result()
+		if err != nil {
+			return err
+		}
+
+		maxMemoryInBytes, err := strconv.ParseFloat(resultMap["maxmemory"], 64)
+		if err != nil {
+			return err
+		}
+
+		mode := GetRedisMode(ctx, rdb, logger)
+		policy := ConfigGetMaxmemoryPolicy(ctx, rdb, "maxmemory-policy", logger)
+		ch <- prometheus.MustNewConstMetric(
+			maxMemoryDesc,
+			prometheus.GaugeValue,
+			maxMemoryInBytes,
+			addr,
+			mode,
+			policy,
+		)
 	}
-
-	maxMemoryInBytes, err := strconv.ParseFloat(resultMap["maxmemory"], 64)
-	if err != nil {
-		return err
-	}
-
-	ch <- prometheus.MustNewConstMetric(
-		maxMemoryDesc,
-		prometheus.GaugeValue,
-		maxMemoryInBytes,
-	)
-
 	return err
 }
 
