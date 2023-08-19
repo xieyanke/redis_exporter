@@ -176,8 +176,8 @@ var statsMetricsDesc = map[string]*MetricDesc{
 	},
 }
 
-func NewInfoStatsScraper() *InfoScraper {
-	return &InfoScraper{
+func NewInfoStatsScraper() *infoScraper {
+	return &infoScraper{
 		section:     "stats",
 		sectionHelp: "Collect info stats from each redis server.",
 		metricsDesc: statsMetricsDesc,

@@ -194,8 +194,8 @@ var memoryMetricsDesc = map[string]*MetricDesc{
 	},
 }
 
-func NewInfoMemoryScraper() *InfoScraper {
-	return &InfoScraper{
+func NewInfoMemoryScraper() *infoScraper {
+	return &infoScraper{
 		section:     "memory",
 		sectionHelp: "Collect info memory from each redis server.",
 		metricsDesc: memoryMetricsDesc,

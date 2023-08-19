@@ -43,8 +43,8 @@ var cpuMetricsDesc map[string]*MetricDesc = map[string]*MetricDesc{
 	},
 }
 
-func NewInfoCPUScraper() *InfoScraper {
-	return &InfoScraper{
+func NewInfoCPUScraper() *infoScraper {
+	return &infoScraper{
 		section:     "cpu",
 		sectionHelp: "Collect info cpu from each redis server.",
 		metricsDesc: cpuMetricsDesc,

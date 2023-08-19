@@ -110,8 +110,8 @@ var persistenceMetricsDesc = map[string]*MetricDesc{
 	},
 }
 
-func NewInfoPersistenceScraper() *InfoScraper {
-	return &InfoScraper{
+func NewInfoPersistenceScraper() *infoScraper {
+	return &infoScraper{
 		section:     "persistence",
 		sectionHelp: "Collect info persistence from each redis server.",
 		metricsDesc: persistenceMetricsDesc,

@@ -36,7 +36,6 @@ import (
 	"github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"github.com/redis/go-redis/v9"
 	"github.com/xieyanke/redis_exporter/collector"
-	"github.com/xieyanke/redis_exporter/collector/util"
 )
 
 var (
@@ -65,6 +64,7 @@ var scrapers = map[collector.Scraper]bool{
 	collector.NewInfoReplicationScraper(): true,
 	collector.NewInfoPersistenceScraper(): true,
 	collector.NewInfoStatsScraper():       true,
+	collector.NewClusterInfoScraper():     true,
 }
 
 func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFunc {
@@ -105,7 +105,7 @@ func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFun
 		}
 		defer initCli.Close()
 
-		allAddrs, _ := util.GetRedisClusterNodes(ctx, initCli)
+		allAddrs, _ := collector.GetRedisClusterNodes(ctx, initCli)
 		var opts []*redis.Options
 		for _, addr := range allAddrs {
 			opts = append(opts, &redis.Options{Addr: addr, Password: *passwd})

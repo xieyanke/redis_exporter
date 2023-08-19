@@ -49,8 +49,8 @@ var replicationMetricsDesc = map[string]*MetricDesc{
 	},
 }
 
-func NewInfoReplicationScraper() *InfoScraper {
-	return &InfoScraper{
+func NewInfoReplicationScraper() *infoScraper {
+	return &infoScraper{
 		section:     "replication",
 		sectionHelp: "Collect info replication from each redis server.",
 		metricsDesc: replicationMetricsDesc,

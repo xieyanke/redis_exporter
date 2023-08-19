@@ -44,8 +44,8 @@ var serverMetricsDesc map[string]*MetricDesc = map[string]*MetricDesc{
 	},
 }
 
-func NewInfoServerScraper() *InfoScraper {
-	return &InfoScraper{
+func NewInfoServerScraper() *infoScraper {
+	return &infoScraper{
 		section:     "server",
 		sectionHelp: "Collect info server from each redis server.",
 		metricsDesc: serverMetricsDesc,

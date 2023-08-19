@@ -139,7 +139,7 @@ func getRedisMajorVersion(ctx context.Context, rdb redis.UniversalClient, logger
 		return -1.0, err
 	}
 
-	version := parseInfoSection(section)["redis_version"]
+	version := parseRedisRespInfo(section)["redis_version"]
 	versionStr = versionRE.FindString(version)
 	versionNum, err = strconv.ParseFloat(versionStr, 64)
 	if err != nil {
