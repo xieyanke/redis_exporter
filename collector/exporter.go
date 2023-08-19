@@ -27,7 +27,6 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/redis/go-redis/v9"
-	"github.com/xieyanke/redis_exporter/util"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -40,15 +39,8 @@ const (
 var (
 	redisUp = prometheus.NewDesc(
 		prometheus.BuildFQName(Namespace, "", "up"),
-		"Whether the redis node is up.",
+		"Whether the redis service is up.",
 		nil,
-		nil,
-	)
-
-	redisNodeUptime = prometheus.NewDesc(
-		prometheus.BuildFQName(Namespace, "", "uptime_seconds"),
-		"Number of seconds since the redis node started.",
-		[]string{"node_id"},
 		nil,
 	)
 
@@ -67,6 +59,13 @@ var (
 	)
 )
 
+type MetricDesc struct {
+	Subsystem string
+	Name      string
+	Help      string
+	Labels    []string
+}
+
 // Exporter collects redis metrics.
 type Exporter struct {
 	ctx      context.Context
@@ -77,38 +76,24 @@ type Exporter struct {
 
 // Collect implements prometheus.Collector.
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
-	up := e.scrape(e.ctx, ch)
-	ch <- prometheus.MustNewConstMetric(redisUp, prometheus.CounterValue, up)
+	e.scrape(e.ctx, ch)
+	ch <- prometheus.MustNewConstMetric(redisUp, prometheus.CounterValue, 1)
 }
 
 // Describe implements prometheus.Collector.
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- redisUp
 	ch <- redisScrapeDurationSeconds
-	ch <- redisNodeUptime
 }
 
 // *Exporter implements prometheus.Collector
 var _ prometheus.Collector = (*Exporter)(nil)
 
 func (e *Exporter) scrape(ctx context.Context, ch chan<- prometheus.Metric) float64 {
-	// var err error
-	// scrapeTime := time.Now()
-
 	var rdbs []*redis.Client
 	for _, opt := range e.opts {
 		rdbs = append(rdbs, redis.NewClient(opt))
 	}
-
-	// TODO: close
-
-	// _, err = rdb.Ping(ctx).Result()
-	// if err != nil {
-	// 	level.Error(e.logger).Log("msg", "Error pinging redis", "err", err)
-	// 	return 0.0
-	// }
-
-	// ch <- prometheus.MustNewConstMetric(redisScrapeDurationSeconds, prometheus.GaugeValue, time.Since(scrapeTime).Seconds(), "connection")
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -145,7 +130,7 @@ func New(ctx context.Context, opts []*redis.Options, scrapers []Scraper, logger 
 
 var versionRE = regexp.MustCompile(`^\d+\.\d+`)
 
-func getRedisVersion(ctx context.Context, rdb redis.UniversalClient, logger log.Logger) (float64, error) {
+func getRedisMajorVersion(ctx context.Context, rdb redis.UniversalClient, logger log.Logger) (float64, error) {
 	var versionStr string
 	var versionNum float64
 
@@ -154,7 +139,7 @@ func getRedisVersion(ctx context.Context, rdb redis.UniversalClient, logger log.
 		return -1.0, err
 	}
 
-	version := util.ParseInfoSection(section)["redis_version"]
+	version := parseInfoSection(section)["redis_version"]
 	versionStr = versionRE.FindString(version)
 	versionNum, err = strconv.ParseFloat(versionStr, 64)
 	if err != nil {

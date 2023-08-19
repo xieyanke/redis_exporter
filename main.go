@@ -36,7 +36,7 @@ import (
 	"github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"github.com/redis/go-redis/v9"
 	"github.com/xieyanke/redis_exporter/collector"
-	"github.com/xieyanke/redis_exporter/util"
+	"github.com/xieyanke/redis_exporter/collector/util"
 )
 
 var (
@@ -58,9 +58,13 @@ func init() {
 }
 
 var scrapers = map[collector.Scraper]bool{
-	collector.MaxMemoryScraper{}:    true,
-	&collector.ClusterInfoScraper{}: true,
-	&collector.InfoServerScraper{}:  true,
+	collector.NewInfoClientsScraper():     true,
+	collector.NewInfoCPUScraper():         true,
+	collector.NewInfoServerScraper():      true,
+	collector.NewInfoMemoryScraper():      true,
+	collector.NewInfoReplicationScraper(): true,
+	collector.NewInfoPersistenceScraper(): true,
+	collector.NewInfoStatsScraper():       true,
 }
 
 func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFunc {
@@ -85,13 +89,23 @@ func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFun
 		defer cancel()
 
 		r = r.WithContext(ctx)
+		var initCli *redis.Client
+		for _, addr := range *addrs {
+			initCli = redis.NewClient(&redis.Options{
+				Addr:     addr,
+				Password: *passwd,
+			})
 
-		firstCli := redis.NewClient(&redis.Options{
-			Addr:     (*addrs)[0],
-			Password: *passwd,
-		})
+			err = initCli.Ping(ctx).Err()
+			if err == nil {
+				break
+			} else {
+				level.Error(logger).Log("msg", fmt.Sprintf("%s can't connect", addr), "err", err)
+			}
+		}
+		defer initCli.Close()
 
-		allAddrs := util.GetAllRedisNodes(ctx, firstCli)
+		allAddrs, _ := util.GetRedisClusterNodes(ctx, initCli)
 		var opts []*redis.Options
 		for _, addr := range allAddrs {
 			opts = append(opts, &redis.Options{Addr: addr, Password: *passwd})
