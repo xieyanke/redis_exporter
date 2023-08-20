@@ -57,14 +57,16 @@ func init() {
 }
 
 var scrapers = map[collector.Scraper]bool{
-	collector.NewInfoClientsScraper():     true,
-	collector.NewInfoCPUScraper():         true,
-	collector.NewInfoServerScraper():      true,
-	collector.NewInfoMemoryScraper():      true,
-	collector.NewInfoReplicationScraper(): true,
-	collector.NewInfoPersistenceScraper(): true,
-	collector.NewInfoStatsScraper():       true,
-	collector.NewClusterInfoScraper():     true,
+	collector.NewInfoClientsScraper():      true,
+	collector.NewInfoCPUScraper():          true,
+	collector.NewInfoServerScraper():       true,
+	collector.NewInfoMemoryScraper():       true,
+	collector.NewInfoReplicationScraper():  true,
+	collector.NewInfoPersistenceScraper():  true,
+	collector.NewInfoStatsScraper():        true,
+	collector.NewClusterInfoScraper():      true,
+	collector.NewInfoKeyspaceScraper():     true,
+	collector.NewInfoCommandStatsScraper(): true,
 }
 
 func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFunc {
