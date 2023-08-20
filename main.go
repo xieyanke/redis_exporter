@@ -56,7 +56,7 @@ func init() {
 	prometheus.MustRegister(version.NewCollector("redis_exporter"))
 }
 
-var scrapers = map[collector.Scraper]bool{
+var scrapersTable = map[collector.Scraper]bool{
 	collector.NewInfoClientsScraper():      true,
 	collector.NewInfoCPUScraper():          true,
 	collector.NewInfoServerScraper():       true,
@@ -64,7 +64,6 @@ var scrapers = map[collector.Scraper]bool{
 	collector.NewInfoReplicationScraper():  true,
 	collector.NewInfoPersistenceScraper():  true,
 	collector.NewInfoStatsScraper():        true,
-	collector.NewClusterInfoScraper():      true,
 	collector.NewInfoKeyspaceScraper():     true,
 	collector.NewInfoCommandStatsScraper(): true,
 }
@@ -107,7 +106,14 @@ func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFun
 		}
 		defer initCli.Close()
 
-		allAddrs, _ := collector.GetRedisClusterNodes(ctx, initCli)
+		var allAddrs []string
+		switch *mode {
+		case "cluster":
+			allAddrs, _ = collector.GetRedisClusterNodes(ctx, initCli)
+		default:
+			allAddrs = *addrs
+		}
+
 		var opts []*redis.Options
 		for _, addr := range allAddrs {
 			opts = append(opts, &redis.Options{Addr: addr, Password: *passwd})
@@ -128,7 +134,7 @@ func newHandler(scrapers []collector.Scraper, logger log.Logger) http.HandlerFun
 func main() {
 	// Generate ON/OFF flags for all scrapers.
 	scraperFlags := map[collector.Scraper]*bool{}
-	for scraper, enabledByDefault := range scrapers {
+	for scraper, enabledByDefault := range scrapersTable {
 		defaultOn := "false"
 		if enabledByDefault {
 			defaultOn = "true"
@@ -152,11 +158,17 @@ func main() {
 	logger := promlog.New(promlogconfig)
 
 	enabledScrapers := []collector.Scraper{}
+
 	for scraper, enabled := range scraperFlags {
 		if *enabled {
 			level.Info(logger).Log("msg", "Scraper enabled", "scraper", scraper.Name())
 			enabledScrapers = append(enabledScrapers, scraper)
 		}
+	}
+
+	if *mode == "cluster" {
+		scraper := collector.NewClusterInfoScraper()
+		enabledScrapers = append(enabledScrapers, scraper)
 	}
 
 	handlerFunc := newHandler(enabledScrapers, logger)

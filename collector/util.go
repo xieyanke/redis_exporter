@@ -3,12 +3,35 @@ package collector
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/redis/go-redis/v9"
 )
+
+var versionRE = regexp.MustCompile(`^\d+\.\d+`)
+
+func GetRedisMajorVersion(ctx context.Context, rdb redis.UniversalClient, logger log.Logger) (float64, error) {
+	var versionStr string
+	var versionNum float64
+
+	section, err := rdb.Info(ctx, "Server").Result()
+	if err != nil {
+		return -1.0, err
+	}
+
+	version := parseRedisInfoResp(section)["redis_version"]
+	versionStr = versionRE.FindString(version)
+	versionNum, err = strconv.ParseFloat(versionStr, 64)
+	if err != nil {
+		return -1.0, err
+	}
+
+	return versionNum, nil
+}
 
 func GetRedisClusterNodes(ctx context.Context, rdb *redis.Client) ([]string, error) {
 	result, err := rdb.ClusterNodes(ctx).Result()

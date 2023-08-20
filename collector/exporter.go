@@ -19,8 +19,6 @@ package collector
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strconv"
 	"sync"
 	"time"
 
@@ -126,25 +124,4 @@ func New(ctx context.Context, opts []*redis.Options, scrapers []Scraper, logger 
 		opts:     opts,
 		scrapers: scrapers,
 	}
-}
-
-var versionRE = regexp.MustCompile(`^\d+\.\d+`)
-
-func getRedisMajorVersion(ctx context.Context, rdb redis.UniversalClient, logger log.Logger) (float64, error) {
-	var versionStr string
-	var versionNum float64
-
-	section, err := rdb.Info(ctx, "Server").Result()
-	if err != nil {
-		return -1.0, err
-	}
-
-	version := parseRedisInfoResp(section)["redis_version"]
-	versionStr = versionRE.FindString(version)
-	versionNum, err = strconv.ParseFloat(versionStr, 64)
-	if err != nil {
-		return -1.0, err
-	}
-
-	return versionNum, nil
 }
