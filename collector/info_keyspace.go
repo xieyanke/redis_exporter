@@ -15,3 +15,43 @@ limitations under the License.
 */
 
 package collector
+
+import (
+	"fmt"
+	"strings"
+)
+
+func initKeyspaceMetricsDesc(m map[string]string) map[string]*MetricDesc {
+	var keyspaceMetricsDesc map[string]*MetricDesc = make(map[string]*MetricDesc, 1)
+	for k, _ := range m {
+		var name string
+		var help string
+
+		if strings.Contains(k, "keys") {
+			name = fmt.Sprintf("%s_%s_%s", "keyspace", k, "in_total")
+			help = "Number of keyspace keys in the redis db"
+		} else if strings.Contains(k, "expires") {
+			name = fmt.Sprintf("%s_%s_%s", "keyspace", k, "in_total")
+			help = "Number of expire keys in the redis db"
+		} else if strings.Contains(k, "avg_ttl") {
+			name = fmt.Sprintf("%s_%s_%s", "keyspace", k, "in_microseconds")
+			help = "The average microseconds to live of all keys in the redis db."
+		}
+
+		keyspaceMetricsDesc[k] = &MetricDesc{
+			Subsystem: "server",
+			Name:      name,
+			Help:      help,
+			Labels:    []string{"addr"},
+		}
+	}
+
+	return keyspaceMetricsDesc
+}
+
+func NewInfoKeyspaceScraper() *infoScraper {
+	return &infoScraper{
+		section:     "keyspace",
+		sectionHelp: "Collect info keyspace from each redis server.",
+	}
+}

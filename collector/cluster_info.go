@@ -154,12 +154,12 @@ func (scraper *clusterInfoScraper) Scrape(ctx context.Context, rdbs []*redis.Cli
 			return err
 		}
 
-		resMap := parseRedisRespInfo(res)
+		resMap := parseRedisInfoResp(res)
 
 		for k, v := range scraper.metricsDesc {
 			var f64 float64
 			f64, err = strconv.ParseFloat(resMap[k], 64)
-			checkParseRedisRespInfoError(k, addr, err, logger)
+			checkParseRedisInfoRespError(k, addr, err, logger)
 
 			desc := prometheus.NewDesc(
 				prometheus.BuildFQName(Namespace, v.Subsystem, v.Name),

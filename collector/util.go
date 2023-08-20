@@ -30,29 +30,50 @@ func GetRedisClusterNodes(ctx context.Context, rdb *redis.Client) ([]string, err
 	return addrs, nil
 }
 
-func parseRedisRespInfo(resp string) map[string]string {
+func parseRedisInfoResp(resp string) map[string]string {
 	resp = strings.TrimSpace(resp)
 	lines := strings.Split(resp, "\n")
 
-	m := make(map[string]string, 4)
+	m := make(map[string]string, 8)
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "#") {
-			arr := strings.Split(line, ":")
-			v := strings.TrimSpace(arr[1])
-			switch v {
+			lineArr := strings.Split(line, ":")
+			key := strings.TrimSpace(lineArr[0])
+			value := strings.TrimSpace(lineArr[1])
+			switch value {
 			case "ok", "up":
-				v = "1"
+				value = "1"
 			case "down":
-				v = "0"
+				value = "0"
 			}
 
-			m[strings.TrimSpace(arr[0])] = v
+			m[key] = value
 		}
 	}
 	return m
 }
 
-func checkParseRedisRespInfoError(key, addr string, err error, logger log.Logger) {
+func parseRedisInfoKeyspaceOrCmdtatsResp(resp string) map[string]string {
+	resp = strings.TrimSpace(resp)
+	lines := strings.Split(resp, "\n")
+
+	m := make(map[string]string, 8)
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "#") {
+			lineArr := strings.Split(line, ":")
+			prefix := strings.TrimSpace(lineArr[0])
+			items := strings.Split(strings.TrimSpace(lineArr[1]), ",")
+			for _, item := range items {
+				itemArr := strings.Split(item, "=")
+				m[fmt.Sprintf("%s_%s", prefix, itemArr[0])] = itemArr[1]
+			}
+		}
+	}
+
+	return m
+}
+
+func checkParseRedisInfoRespError(key, addr string, err error, logger log.Logger) {
 	if err != nil {
 		level.Error(logger).Log("msg", fmt.Sprintf("parse %s value failed from %s", key, addr), "err", err)
 	}

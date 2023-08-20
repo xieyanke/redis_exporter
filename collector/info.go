@@ -43,13 +43,25 @@ func (scraper *infoScraper) Scrape(ctx context.Context, rdbs []*redis.Client, ch
 		if err != nil {
 			return err
 		}
+		var sectionMap map[string]string
 
-		sectionMap := parseRedisRespInfo(sectionRes)
+		switch scraper.section {
+		case "keyspace":
+			sectionMap = parseRedisInfoKeyspaceOrCmdtatsResp(sectionRes)
+			metricsDesc := initKeyspaceMetricsDesc(sectionMap)
+			scraper.metricsDesc = metricsDesc
+		case "commandstats":
+			sectionMap = parseRedisInfoKeyspaceOrCmdtatsResp(sectionRes)
+			metricsDesc := initCmdStatsMetricsDesc(sectionMap)
+			scraper.metricsDesc = metricsDesc
+		default:
+			sectionMap = parseRedisInfoResp(sectionRes)
+		}
 
 		for k, v := range scraper.metricsDesc {
 			var f64 float64
 			f64, err = strconv.ParseFloat(sectionMap[k], 64)
-			checkParseRedisRespInfoError(k, addr, err, logger)
+			checkParseRedisInfoRespError(k, addr, err, logger)
 
 			desc := prometheus.NewDesc(
 				prometheus.BuildFQName(Namespace, v.Subsystem, v.Name),
